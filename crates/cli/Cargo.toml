@@ -1,0 +1,11 @@
+[package]
+name = "transcriber-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+engine = { path = "../engine" }
+
+[features]
+metal = ["engine/metal"]
+vulkan = ["engine/vulkan"]

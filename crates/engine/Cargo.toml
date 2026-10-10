@@ -1,0 +1,13 @@
+[package]
+name = "engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+whisper-rs = "0.16"
+hound = "3.5"
+thiserror = "2"
+
+[features]
+metal = ["whisper-rs/metal"]
+vulkan = ["whisper-rs/vulkan"]
