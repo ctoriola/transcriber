@@ -48,7 +48,8 @@ A desktop app that transcribes meetings in real time from the computer's microph
 - **No-loss guarantee (Decision):** raw audio is written continuously to disk as 16 kHz mono 16-bit PCM WAV from the moment recording starts, independent of transcription. Do not use FLAC for the live recording; a FLAC stream cut off by a crash is hard to recover, while a WAV only needs its header repaired. The writer flushes and fsyncs at least once per second. The transcription pipeline reads from a queue of speech segments. If transcription falls behind, the queue grows; audio is never discarded.
 - **Queue entries reference audio on disk (Decision):** each queued segment stores sample offsets (start, end) into the session's audio file, not the samples themselves. Memory use stays flat no matter how far behind transcription is. The last transcribed offset is persisted, so crash recovery resumes from there instead of starting over.
 - Voice activity detection (Silero VAD) splits audio into speech segments. Each segment is sent to Whisper when it ends, or at a maximum segment length of about 25 seconds. When the maximum is reached, cut at the lowest-energy point in the last few seconds rather than at exactly 25 s, to avoid splitting words.
-- Pass the previous segment's text to Whisper as the initial prompt so the transcript reads continuously across segment boundaries (reset the prompt if hallucinated repetition is detected).
+- Do not pass the previous segment's text to Whisper as the initial prompt. M1 testing showed this caused whole sentences to be dropped (see `DECISIONS.md`). The initial prompt is reserved for user-supplied vocabulary (names, jargon).
+- Whisper always encodes a 30-second window, so very short segments waste most of the work. Pack consecutive speech segments into one buffer of up to about 25 seconds, separated by 1 second of silence, and map timestamps back to the recording (implemented in M1 for file transcription). For live mode, balance this against latency.
 - Transcript text appears per segment, with timestamps. Lag of several seconds is acceptable.
 - UI shows a status indicator: Recording, Transcribing, "N seconds behind", and Caught up.
 - Stop button flushes the queue; the app finishes transcribing everything captured before marking the session complete.
@@ -119,7 +120,7 @@ Reason: small installers, native performance for audio, and good access to Rust 
 | Acceleration | Metal (Apple Silicon), Vulkan (Windows), CPU fallback. Auto-detect at startup. No CUDA in v1 (Decision): bundling the CUDA runtime alone would exceed the installer size limit. |
 | Audio capture | `cpal` (cross-platform input) |
 | Resampling | `rubato` or ffmpeg, to 16 kHz mono |
-| VAD | Silero VAD. Prefer whisper.cpp's built-in Silero VAD support if `whisper-rs` exposes it (avoids bundling an ONNX runtime); otherwise Silero via ONNX. Record the outcome in `DECISIONS.md` after M1. |
+| VAD | Silero VAD via whisper.cpp's built-in support (`whisper-rs` standalone VAD context, GGML model `ggml-silero-v5.1.2.bin`, under 1 MB). No ONNX runtime. Confirmed in M1. |
 | File decoding | ffmpeg, bundled as a sidecar binary. Use an LGPL build (no `--enable-gpl` / `--enable-nonfree`); only decoders are needed. |
 | Storage | SQLite (with FTS5) for metadata and transcripts; audio as files on disk |
 | Frontend | React, TypeScript, Vite, Tailwind |
